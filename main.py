@@ -5,38 +5,38 @@ import asyncio
 import requests
 import websockets
 from colorama import init, Fore
-from keep_alive import keep_alive
 
 init(autoreset=True)
 
-status = "dnd"
-custom_status = ".gg/rollbet"
+status = "online"
+custom_status = "Always online"
 
 usertoken = os.getenv("TOKEN")
 if not usertoken:
-    print(Fore.LIGHTRED_EX + "[ERROR] Please add a token inside Secrets.")
+    print(Fore.RED + "[ERROR] No token found.")
     sys.exit()
 
 headers = {"Authorization": usertoken}
-validate = requests.get("https://discord.com/api/v9/users/@me", headers=headers)
-if validate.status_code != 200:
-    print(Fore.LIGHTRED_EX + "[ERROR] Invalid token.")
+user = requests.get("https://discord.com/api/v9/users/@me", headers=headers)
+
+if user.status_code != 200:
+    print(Fore.RED + "[ERROR] Invalid token.")
     sys.exit()
 
-userinfo = validate.json()
-username = userinfo["username"]
-discriminator = userinfo["discriminator"]
-userid = userinfo["id"]
+userinfo = user.json()
+print(Fore.GREEN + f"Logged in as {userinfo['username']}#{userinfo['discriminator']}")
 
-async def run_onliner():
-    print(Fore.LIGHTGREEN_EX + f"Logged in as {username}#{discriminator} ({userid})")
+async def heartbeat(ws, interval):
+    while True:
+        await asyncio.sleep(interval / 1000)
+        await ws.send(json.dumps({"op": 1, "d": None}))
+
+async def main():
     uri = "wss://gateway.discord.gg/?v=9&encoding=json"
-
-    async with websockets.connect(uri) as ws:
+    async with websockets.connect(uri, max_size=2**20) as ws:
         hello = json.loads(await ws.recv())
-        heartbeat_interval = hello["d"]["heartbeat_interval"]
-
-        asyncio.create_task(send_heartbeat(ws, heartbeat_interval))
+        interval = hello["d"]["heartbeat_interval"]
+        asyncio.create_task(heartbeat(ws, interval))
 
         payload = {
             "op": 2,
@@ -63,14 +63,7 @@ async def run_onliner():
         }
 
         await ws.send(json.dumps(payload))
-
         while True:
             await asyncio.sleep(60)
 
-async def send_heartbeat(ws, interval):
-    while True:
-        await asyncio.sleep(interval / 1000)
-        await ws.send(json.dumps({"op": 1, "d": None}))
-
-keep_alive()
-asyncio.run(run_onliner())
+asyncio.run(main())
