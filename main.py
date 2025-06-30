@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import asyncio
-import platform
 import requests
 import websockets
 from colorama import init, Fore
@@ -10,73 +9,68 @@ from keep_alive import keep_alive
 
 init(autoreset=True)
 
-status = "dnd"  # online/dnd/idle
-custom_status = ".gg/rollbet"  # Custom Status
+status = "online"
+custom_status = "youtube.com/@SealedSaucer"
 
 usertoken = os.getenv("TOKEN")
 if not usertoken:
-    print(f"{Fore.WHITE}[{Fore.RED}-{Fore.WHITE}] Please add a token inside Secrets.")
+    print(Fore.LIGHTRED_EX + "[ERROR] Please add a token inside Secrets.")
     sys.exit()
 
-headers = {"Authorization": usertoken, "Content-Type": "application/json"}
-
-validate = requests.get("https://canary.discordapp.com/api/v9/users/@me", headers=headers)
+headers = {"Authorization": usertoken}
+validate = requests.get("https://discord.com/api/v9/users/@me", headers=headers)
 if validate.status_code != 200:
-    print(f"{Fore.WHITE}[{Fore.RED}-{Fore.WHITE}] Your token might be invalid. Please check it again.")
+    print(Fore.LIGHTRED_EX + "[ERROR] Invalid token.")
     sys.exit()
 
-userinfo = requests.get("https://canary.discordapp.com/api/v9/users/@me", headers=headers).json()
+userinfo = validate.json()
 username = userinfo["username"]
 discriminator = userinfo["discriminator"]
 userid = userinfo["id"]
 
 async def run_onliner():
-    if platform.system() == "Windows":
-        os.system("cls")
-    else:
-        os.system("clear")
+    print(Fore.LIGHTGREEN_EX + f"Logged in as {username}#{discriminator} ({userid})")
+    uri = "wss://gateway.discord.gg/?v=9&encoding=json"
 
-    print(f"{Fore.WHITE}[{Fore.LIGHTGREEN_EX}+{Fore.WHITE}] Logged in as {Fore.LIGHTBLUE_EX}{username} {Fore.WHITE}({userid})!")
+    async with websockets.connect(uri) as ws:
+        hello = json.loads(await ws.recv())
+        heartbeat_interval = hello["d"]["heartbeat_interval"]
 
-    async with websockets.connect("wss://gateway.discord.gg/?v=9&encoding=json") as ws:
-        start = json.loads(await ws.recv())
-        heartbeat = start["d"]["heartbeat_interval"]
+        asyncio.create_task(send_heartbeat(ws, heartbeat_interval))
 
-        auth = {
+        payload = {
             "op": 2,
             "d": {
                 "token": usertoken,
                 "properties": {
-                    "$os": "Windows 10",
-                    "$browser": "Google Chrome",
-                    "$device": "Windows",
+                    "$os": "windows",
+                    "$browser": "chrome",
+                    "$device": "pc"
                 },
-                "presence": {"status": status, "afk": False},
-            },
+                "presence": {
+                    "status": status,
+                    "afk": False,
+                    "since": 0,
+                    "activities": [
+                        {
+                            "name": "Custom Status",
+                            "type": 4,
+                            "state": custom_status
+                        }
+                    ]
+                }
+            }
         }
-        await ws.send(json.dumps(auth))
 
-        cstatus = {
-            "op": 3,
-            "d": {
-                "since": 0,
-                "activities": [
-                    {
-                        "type": 4,
-                        "state": custom_status,
-                        "name": "Custom Status",
-                        "id": "custom"
-                    }
-                ],
-                "status": status,
-                "afk": False,
-            },
-        }
-        await ws.send(json.dumps(cstatus))
+        await ws.send(json.dumps(payload))
 
         while True:
-            await asyncio.sleep(heartbeat / 1000)
-            await ws.send(json.dumps({"op": 1, "d": None}))
+            await asyncio.sleep(60)
+
+async def send_heartbeat(ws, interval):
+    while True:
+        await asyncio.sleep(interval / 1000)
+        await ws.send(json.dumps({"op": 1, "d": None}))
 
 keep_alive()
 asyncio.run(run_onliner())
