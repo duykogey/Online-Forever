@@ -9,8 +9,8 @@ from keep_alive import keep_alive
 
 init(autoreset=True)
 
-status = "online"
-custom_status = "youtube.com/@SealedSaucer"
+status = "dnd"
+custom_status = ".gg/rollbet"
 
 usertoken = os.getenv("TOKEN")
 if not usertoken:
